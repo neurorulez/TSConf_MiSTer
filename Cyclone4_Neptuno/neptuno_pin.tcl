@@ -1,5 +1,9 @@
-set_location_assignment PIN_T2 -to CLK_50M
+#Basic Global Defines
+set_global_assignment -name GENERATE_RBF_FILE ON
+set_global_assignment -name ON_CHIP_BITSTREAM_DECOMPRESSION OFF
 
+#Clock & LED
+set_location_assignment PIN_T2 -to CLK_50M
 set_location_assignment PIN_E4 -to LED_USER
 
 #SRAM
