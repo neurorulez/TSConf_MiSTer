@@ -18,9 +18,10 @@
 //  with this program; if not, write to the Free Software Foundation, Inc.,
 //  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 //============================================================================
-
+`default_nettype wire
 module emu
 (
+`ifndef CYCLONE
 	//Master input clock
 	input         CLK_50M,
 
@@ -121,6 +122,62 @@ module emu
 	output  [6:0] USER_OUT,
 
 	input         OSD_STATUS
+`else	
+	input         CLK_50M,
+	output        LED_USER,
+
+	output  [7:0] VGA_R,
+	output  [7:0] VGA_G,
+	output  [7:0] VGA_B,
+	output        VGA_HS,
+	output        VGA_VS,
+	output        VGA_CLOCK, //RELOADED
+	output        VGA_BLANK = 1'b1, //RELOADED
+	output        AUDSG_L,
+	output        AUDSG_R,
+
+	output        SD_SCK,
+	output        SD_MOSI,
+	input         SD_MISO,
+	output        SD_CS,
+
+	output        SDRAM_CLK,
+	output        SDRAM_CKE,
+	output [12:0] SDRAM_A,
+	output  [1:0] SDRAM_BA,
+	inout  [15:0] SDRAM_DQ,
+	output        SDRAM_DQML,
+	output        SDRAM_DQMH,
+	output        SDRAM_nCS,
+	output        SDRAM_nCAS,
+	output        SDRAM_nRAS,
+	output        SDRAM_nWE,
+
+	output [20:0] SRAM_ADDR, //Solo 19 Pines montados
+	inout  [15:0] SRAM_DATA,
+	output        SRAM_WE_N,
+	output        SRAM_OE_N,
+	output        SRAM_LB_N,
+	output        SRAM_UB_N,
+	
+	inout         PS2_CLK,
+	inout         PS2_DAT,
+`ifndef JOYDC
+	output        JOY_CLK,
+	output        JOY_LOAD,
+	input         JOY_DATA,
+	output        JOY_SELECT,
+`else
+	input	wire [5:0]JOYSTICK1,
+	input	wire [5:0]JOYSTICK2,
+	output        JOY_SELECT = 1'b1,	
+`endif	
+	output        MCLK,
+	output        SCLK,
+	output        LRCLK,
+	output        SDIN,
+	output        STM_RST = 1'b0
+`endif
 );
 
 assign ADC_BUS  = 'Z;
@@ -186,9 +243,16 @@ wire clk_vid;
 
 pll pll
 (
+`ifndef CYCLONE
 	.refclk(CLK_50M),
 	.outclk_0(clk_sys),
 	.outclk_1(clk_vid)
+`else
+	.inclk0(CLK_50M),
+	.c0(clk_sys),
+	.c1(clk_vid),
+	.locked(locked)
+`endif	
 );
 
 reg ce_28m;
@@ -202,8 +266,13 @@ end
 
 
 //////////////////   HPS I/O   ///////////////////
+`ifndef JOYDC
 wire  [5:0] joy_0;
 wire  [5:0] joy_1;
+`else
+wire  [5:0] joy_0 = ~JOYSTICK1[5:0];
+wire  [5:0] joy_1 = ~JOYSTICK2[5:0];
+`endif
 wire [15:0] joya_0;
 wire [15:0] joya_1;
 wire  [1:0] buttons;
@@ -211,7 +280,11 @@ wire [31:0] status;
 wire [24:0] ps2_mouse;
 wire [10:0] ps2_key;
 
+`ifndef CYCLONE
 wire        forced_scandoubler;
+`else
+wire        forced_scandoubler=host_scandoubler; //Negado = VGA x defecto.
+`endif
 wire [21:0] gamma_bus;
 
 wire [31:0] sd_lba;
@@ -233,7 +306,7 @@ wire [24:0] ioctl_addr;
 wire  [7:0] ioctl_dout;
 wire        ioctl_download;
 wire  [7:0] ioctl_index;
-
+`ifndef CYCLONE
 hps_io #(.STRLEN($size(CONF_STR)>>3)) hps_io
 (
 	.clk_sys(clk_sys),
@@ -275,7 +348,74 @@ hps_io #(.STRLEN($size(CONF_STR)>>3)) hps_io
 	.ioctl_download(ioctl_download),
 	.ioctl_index(ioctl_index)
 );
+`else
+wire [7:0]R_OSD,G_OSD,B_OSD;
+wire host_scandoubler;
+//wire [7:0]R_IN = ~(hblank | vblank) ? R : 0;
+//wire [7:0]G_IN = ~(hblank | vblank) ? G : 0;
+//wire [7:0]B_IN = ~(hblank | vblank) ? B : 0;
+assign VGA_CLOCK = CLK_VIDEO;
 
+data_io data_io
+(
+	.clk(clk_sys),
+	.CLOCK_50(CLOCK_50), //Para modulos de I2s y Joystick
+	
+	.debug(),
+	
+	.reset_n(locked),
+
+	.vga_hsync(~HSync),
+	.vga_vsync(~VSync),
+	
+	.red_i(R),//_IN),
+	.green_i(G),//_IN)
+	.blue_i(B),//_IN)
+	.red_o(R_OSD),
+	.green_o(G_OSD),
+	.blue_o(B_OSD),
+	
+	.ps2k_clk_in(PS2_CLK),
+	.ps2k_dat_in(PS2_DAT),
+	.ps2_key(ps2_key),
+	.host_scandoubler_disable(host_scandoubler),
+	
+`ifndef JOYDC
+	.JOY_CLK(JOY_CLK),
+	.JOY_LOAD(JOY_LOAD),
+	.JOY_DATA(JOY_DATA),
+	.JOY_SELECT(JOY_SELECT),
+	.joy1(joystick_0),
+	.joy2(joystick_1),
+`endif
+	.dac_MCLK(MCLK),
+	.dac_LRCK(LRCLK),
+	.dac_SCLK(SCLK),
+	.dac_SDIN(SDIN),
+	.sigma_L(AUDSG_L),
+	.sigma_R(AUDSG_R),
+	.L_data(AUDIO_L),
+	.R_data(AUDIO_R),
+	
+	.spi_miso(),//SD_MISO),
+	.spi_mosi(),//SD_MOSI),
+	.spi_clk(),//SD_SCK),
+	.spi_cs(),//SD_CS),
+
+	.img_mounted(img_mounted),
+	.img_size(img_size),
+
+	.status(status),
+	
+	.ioctl_ce(1'b1),
+	.ioctl_wr(ioctl_wr),
+	.ioctl_addr(ioctl_addr),
+	.ioctl_dout(ioctl_dout),
+	.ioctl_download(ioctl_download),
+	.ioctl_index(ioctl_index),
+	.ioctl_file_ext()
+);
+`endif
 
 ////////////////////  MAIN  //////////////////////
 wire [7:0] R,G,B;
@@ -342,6 +482,7 @@ tsconf tsconf
 	.loader_wr(ioctl_wr && ioctl_download && !ioctl_index && !ioctl_addr[24:16])
 );
 
+
 assign DDRAM_CLK = clk_sys;
 
 wire [20:0] gs_mem_addr;
@@ -360,7 +501,7 @@ always_comb begin
 	 2,3:                        gs_mem_mask = 0;
 	endcase
 end
-
+`ifndef CYCLONE
 ddram ddram
 (
 	.*,
@@ -371,7 +512,18 @@ ddram ddram
 	.rd(gs_mem_rd),
 	.ready(gs_mem_ready)
 );
+`else
 
+//always @(posedge DDRAM_CLK) begin
+ assign SRAM_ADDR = gs_mem_rd ? gs_mem_addr[19:0] : 20'h00000;  //Solo 19 Pines montados
+ assign SRAM_DATA = gs_mem_wr ? {gs_mem_din,gs_mem_din} : 16'hzzzz;
+ assign gs_mem_dout = gs_mem_rd ? gs_mem_addr[20] ? SRAM_DATA[15:8] : SRAM_DATA[7:0] : 8'h00;
+ assign SRAM_OE_N = ~gs_mem_rd | ~gs_mem_wr;
+ assign SRAM_WE_N = ~gs_mem_wr;
+ assign SRAM_LB_N =  gs_mem_addr[20];
+ assign SRAM_UB_N = ~gs_mem_addr[20];
+
+`endif
 assign AUDIO_S = 1;
 assign AUDIO_MIX = status[4:3];
 
@@ -399,7 +551,12 @@ video_mixer #(.GAMMA(1)) video_mixer
 (
 	.*,
 	.ce_pix_out(CE_PIXEL),
-
+`ifdef CYCLONE
+	.R(R_OSD),
+	.G(G_OSD),
+	.B(B_OSD),
+	.VGA_DE(),
+`endif
 	.scanlines(0),
 	.scandoubler(scale || forced_scandoubler),
 	.hq2x(scale==1),
@@ -415,6 +572,8 @@ wire sdss;
 
 reg reset_img;
 reg vsd_sel = 0;
+wire vsdmiso;
+`ifndef CYCLONE
 always @(posedge clk_sys) begin
 	integer to = 0;
 	
@@ -428,7 +587,6 @@ always @(posedge clk_sys) begin
 	end
 end
 
-wire vsdmiso;
 sd_card sd_card
 (
 	.*,
@@ -441,7 +599,7 @@ sd_card sd_card
 	.mosi(sdmosi),
 	.miso(vsdmiso)
 );
-
+`endif
 assign SD_CS   = vsd_sel | sdss;
 assign SD_SCK  = sdclk & ~SD_CS;
 assign SD_MOSI = sdmosi & ~SD_CS;
