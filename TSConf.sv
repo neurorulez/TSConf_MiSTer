@@ -351,9 +351,9 @@ hps_io #(.STRLEN($size(CONF_STR)>>3)) hps_io
 `else
 wire [7:0]R_OSD,G_OSD,B_OSD;
 wire host_scandoubler;
-//wire [7:0]R_IN = ~(hblank | vblank) ? R : 0;
-//wire [7:0]G_IN = ~(hblank | vblank) ? G : 0;
-//wire [7:0]B_IN = ~(hblank | vblank) ? B : 0;
+wire [7:0]R_IN = ~(HBlank | VBlank) ? R : 0;
+wire [7:0]G_IN = ~(HBlank | VBlank) ? G : 0;
+wire [7:0]B_IN = ~(HBlank | VBlank) ? B : 0;
 assign VGA_CLOCK = CLK_VIDEO;
 
 data_io data_io
@@ -368,9 +368,9 @@ data_io data_io
 	.vga_hsync(~HSync),
 	.vga_vsync(~VSync),
 	
-	.red_i(R),//_IN),
-	.green_i(G),//_IN)
-	.blue_i(B),//_IN)
+	.red_i(R_IN),
+	.green_i(G_IN),
+	.blue_i(B_IN),
 	.red_o(R_OSD),
 	.green_o(G_OSD),
 	.blue_o(B_OSD),
@@ -556,12 +556,25 @@ video_mixer #(.GAMMA(1)) video_mixer
 	.G(G_OSD),
 	.B(B_OSD),
 	.VGA_DE(),
+	.VGA_VS(hsync_o),
+	.VGA_HS(vsync_o),		
 `endif
 	.scanlines(0),
 	.scandoubler(scale || forced_scandoubler),
 	.hq2x(scale==1),
 	.mono(0)
 );
+
+`ifdef CYCLONE
+reg hsync_o, vsync_o, csync_o, csync_en;
+
+csync csync_gen (.clk(CLK_VIDEO), .hsync(hsync_o), .vsync(vsync_o), .csync(csync_o));
+
+assign csync_en = !(scale || forced_scandoubler);
+assign VGA_VS = csync_en ? 1'b1     : ~vsync_o;
+assign VGA_HS = csync_en ? ~csync_o : ~hsync_o; //~ en el orignal de Mister van Negadas
+
+`endif
 
 
 //////////////////   SD   ///////////////////

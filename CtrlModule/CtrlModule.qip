@@ -15,4 +15,4 @@ set_global_assignment -name VHDL_FILE          ../CtrlModule/ZPUFlex/zpupkg.vhd
 set_global_assignment -name VHDL_FILE          ../CtrlModule/modules/audio_i2s.vhd
 set_global_assignment -name VERILOG_FILE       ../CtrlModule/modules/sigma_delta_dac.v
 set_global_assignment -name VERILOG_FILE       ../CtrlModule/modules/joydecoder_neptuno.v
-
+set_global_assignment -name VERILOG_FILE       ../CtrlModule/modules/csync.v
