@@ -185,8 +185,8 @@ assign USER_OUT = '1;
 assign VGA_F1 = 0;
 assign {UART_RTS, UART_TXD, UART_DTR} = 0;
 
-assign LED_USER  = (vsd_sel & sd_act) | ioctl_download;
-assign LED_DISK  = {1'b1, ~vsd_sel & sd_act};
+assign LED_USER  = sd_act; //(vsd_sel & sd_act) | ioctl_download;
+assign LED_DISK  = 1'b1; //{1'b1, ~vsd_sel & sd_act};
 assign LED_POWER = 0;
 assign BUTTONS   = 0;
 
@@ -283,7 +283,7 @@ wire [10:0] ps2_key;
 `ifndef CYCLONE
 wire        forced_scandoubler;
 `else
-wire        forced_scandoubler=host_scandoubler; //Negado = VGA x defecto.
+wire        forced_scandoubler=!host_scandoubler; //Negado = VGA x defecto.
 `endif
 wire [21:0] gamma_bus;
 
@@ -365,8 +365,8 @@ data_io data_io
 	
 	.reset_n(locked),
 
-	.vga_hsync(~HSync),
-	.vga_vsync(~VSync),
+	.vga_hsync(HS),
+	.vga_vsync(VS),
 	
 	.red_i(R_IN),
 	.green_i(G_IN),
@@ -556,8 +556,8 @@ video_mixer #(.GAMMA(1)) video_mixer
 	.G(G_OSD),
 	.B(B_OSD),
 	.VGA_DE(),
-	.VGA_VS(hsync_o),
-	.VGA_HS(vsync_o),		
+	.VGA_VS(vsync_o),
+	.VGA_HS(hsync_o),		
 `endif
 	.scanlines(0),
 	.scandoubler(scale || forced_scandoubler),
@@ -578,6 +578,7 @@ assign VGA_HS = csync_en ? ~csync_o : ~hsync_o; //~ en el orignal de Mister van 
 
 
 //////////////////   SD   ///////////////////
+`ifndef CYCLONE
 wire sdclk;
 wire sdmosi;
 wire sdmiso = vsd_sel ? vsdmiso : SD_MISO;
@@ -586,7 +587,7 @@ wire sdss;
 reg reset_img;
 reg vsd_sel = 0;
 wire vsdmiso;
-`ifndef CYCLONE
+
 always @(posedge clk_sys) begin
 	integer to = 0;
 	
@@ -612,10 +613,20 @@ sd_card sd_card
 	.mosi(sdmosi),
 	.miso(vsdmiso)
 );
-`endif
+
 assign SD_CS   = vsd_sel | sdss;
 assign SD_SCK  = sdclk & ~SD_CS;
 assign SD_MOSI = sdmosi & ~SD_CS;
+
+`else
+
+wire sdmosi, sdclk, sdss;
+wire sdmiso = SD_MISO;
+assign SD_MOSI = sdmosi;
+assign SD_SCK  = sdclk;
+assign SD_CS   = sdss;
+
+`endif
 
 reg sd_act;
 
